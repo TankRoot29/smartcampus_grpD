@@ -1,128 +1,272 @@
-```markdown
-# IoT Parking Monitoring System
+# 🚗 IoT Parking Monitoring System
 
-Une solution IoT complète de bout en bout pour la gestion et la supervision en temps réel d'un parking connecté. Ce projet simule un système de barrière automatisé via un microcontrôleur **ESP32**, achemine les métriques via le protocole **MQTT**, et centralise la supervision sur un dashboard dynamique **Prometheus / Grafana** grâce à une architecture conteneurisée avec **Docker**.
+![IoT](https://img.shields.io/badge/IoT-ESP32-blue)
+![MQTT](https://img.shields.io/badge/Protocol-MQTT-green)
+![Prometheus](https://img.shields.io/badge/Monitoring-Prometheus-orange)
+![Grafana](https://img.shields.io/badge/Dashboard-Grafana-yellow)
+![Docker](https://img.shields.io/badge/Deployment-Docker-blue)
 
-## 🚀 Architecture Globale du Système
+## 📖 Overview
 
-Le projet repose sur une architecture événementielle distribuée, découplée et hautement portable :
+**IoT Parking Monitoring System** est une solution complète de supervision d'un parking intelligent basée sur les technologies IoT, MQTT et l'observabilité moderne.
+
+Le système détecte automatiquement l'entrée et la sortie des véhicules grâce à un ESP32 équipé de capteurs ultrasoniques. Les données sont transmises en temps réel via MQTT puis collectées par Prometheus avant d'être visualisées dans Grafana à travers un tableau de bord interactif.
+
+L'objectif principal est de démontrer la mise en œuvre d'une chaîne IoT complète allant du capteur jusqu'à la supervision temps réel.
+
+---
+
+## 🏗️ Architecture
 
 ```text
-[ Capteurs HC-SR04 ] ──> (ESP32 / Wokwi) 
-                               │
-                       (Protocole MQTT)
-                               ▼
-                     [ Broker Public HiveMQ ]
-                               │
-                       (Internet / Cloud)
-                               ▼
-                    [ Traducteur Python ]  <── Docker Compose
-                               │
-                       (Metrics HTTP :8000)
-                               ▼
-                    [ Base Prometheus ]    <── Docker Compose
-                               │
-                       (Requêtes PromQL)
-                               ▼
-                     [ Dashboard Grafana ]  <── Docker Compose
-
+┌──────────────────┐
+│ HC-SR04 Sensors  │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ ESP32 Controller │
+│ Barrier Control  │
+└────────┬─────────┘
+         │ MQTT
+         ▼
+┌──────────────────┐
+│ HiveMQ Broker    │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Python Exporter  │
+│ MQTT → Metrics   │
+└────────┬─────────┘
+         │ HTTP /metrics
+         ▼
+┌──────────────────┐
+│ Prometheus       │
+└────────┬─────────┘
+         │ PromQL
+         ▼
+┌──────────────────┐
+│ Grafana          │
+│ Dashboard        │
+└──────────────────┘
 ```
 
 ---
 
-## 🛠️ Technologies & Outils Utilisés
+## ✨ Features
 
-* **Matériel Embarqué (Simulation) :** ESP32, Capteurs Ultrasons HC-SR04 (Entrée/Sortie), Servomoteur (Barrière), Buzzer Piezo, LED d'état.
-* **Environnement de Développement :** [Wokwi](https://wokwi.com) & Arduino IDE (C++).
-* **Protocole IoT :** MQTT (Message Queuing Telemetry Transport) via le Broker public `HiveMQ`.
-* **Backend & Pipeline de Données :** Python (Scripts d'écoute MQTT et exposition Prometheus).
-* **Supervision & Observabilité :** Prometheus (Base de données séries temporelles) & Grafana (Visualisation).
-* **Déploiement :** Docker & Docker Compose (Conteneurisation complète de l'infrastructure).
+### 🚘 Smart Vehicle Detection
+
+* Détection des véhicules à l'entrée et à la sortie.
+* Ouverture automatique de la barrière.
+* Gestion du trafic en temps réel.
+
+### 🚦 Visual & Audio Signaling
+
+* LED verte : accès autorisé.
+* LED rouge : parking complet.
+* Buzzer de signalisation.
+
+### 🅿️ Parking Capacity Management
+
+* Capacité maximale configurable.
+* Comptage automatique des places disponibles.
+* Blocage des nouvelles entrées lorsque le parking est saturé.
+
+### 📡 MQTT Communication
+
+* Transmission légère et temps réel.
+* Architecture découplée.
+* Compatible avec tout broker MQTT standard.
+
+### 📊 Real-Time Monitoring
+
+* Export des métriques au format Prometheus.
+* Visualisation Grafana.
+* Alertes visuelles par seuils.
 
 ---
 
-## 📌 Fonctionnalités Principales
+## 🛠️ Technologies Used
 
-* **Automatisation Locale :** Détection des véhicules à l'entrée et à la sortie (seuil réglé à `150 cm`), ouverture synchronisée de la barrière (servomoteur à `90°`), signalisation visuelle (LED Rouge/Verte) et sonore (Buzzer).
-* **Capacité Adaptative :** Gestion dynamique d'un parc de `10 places` maximum avec blocage automatique à l'entrée en cas de saturation.
-* **Routage Cloud Découplé :** Publication instantanée des variations du nombre de places sur un Broker MQTT distant, éliminant les contraintes de pare-feu locaux.
-* **Supervision Temps Réel :** Collecte des métriques par Prometheus et affichage dynamique sur une jauge Grafana interactive avec seuils de couleur d'alerte.
+| Category         | Technology     |
+| ---------------- | -------------- |
+| Embedded System  | ESP32          |
+| Sensors          | HC-SR04        |
+| Actuator         | Servo Motor    |
+| Communication    | MQTT           |
+| Broker           | HiveMQ         |
+| Backend          | Python         |
+| Monitoring       | Prometheus     |
+| Visualization    | Grafana        |
+| Containerization | Docker         |
+| Orchestration    | Docker Compose |
+| Simulation       | Wokwi          |
 
 ---
 
-## 📂 Structure du Répertoire
+## 📂 Project Structure
 
 ```text
+project-root/
+│
 ├── mqtt_exporter/
-│   ├── exporter.py       # Script Python (Pont entre MQTT et Prometheus)
-│   └── requirements.txt  # Dépendances Python (paho-mqtt, prometheus-client)
+│   ├── exporter.py
+│   └── requirements.txt
+│
 ├── prometheus/
-│   └── prometheus.yml    # Configuration du scraping des métriques
-├── docker-compose.yml    # Orchestration des conteneurs (Python, Prometheus, Grafana)
-├── sketch.ino            # Code source C++ pour l'ESP32
-└── README.md             # Documentation du projet
-
+│   └── prometheus.yml
+│
+├── docker-compose.yml
+├── sketch.ino
+└── README.md
 ```
 
 ---
 
-## ⚙️ Instructions d'Installation et Déploiement
+## ⚙️ Installation
 
-### 1. Déploiement de l'Infrastructure Serveur (PC)
-
-Assurez-vous d'avoir [Docker](https://www.docker.com/) installé sur votre machine.
-
-1. Clonez ce dépôt sur votre machine locale :
+### 1. Clone Repository
 
 ```bash
-   git clone [https://github.com/TankRoot29/Projet-IoT---parking-iot-service.git](https://github.com/TankRoot29/Projet-IoT---parking-iot-service.git)
-   cd Projet-IoT---parking-iot-service
+git clone https://github.com/TankRoot29/Projet-IoT---parking-iot-service.git
 
+cd Projet-IoT---parking-iot-service
 ```
 
-2. Lancez l'infrastructure en construisant les conteneurs :
+### 2. Start Infrastructure
 
 ```bash
-   docker compose up --build
-
+docker compose up --build
 ```
 
-Les services suivants seront alors initialisés :
+Services disponibles :
 
-* **Script Traducteur Python :** Écoute le trafic MQTT et l'expose sur le port `8000`.
-* **Prometheus :** Collecte les données et reste accessible sur `http://localhost:9090`.
-* **Grafana :** Interface de supervision accessible sur `http://localhost:3000`.
-
-### 2. Configuration du Microcontrôleur (Wokwi / Physique)
-
-1. Ouvrez votre simulateur Wokwi et chargez le fichier `sketch.ino`.
-2. Installez la bibliothèque **PubSubClient** via le gestionnaire de bibliothèques (Library Manager).
-3. Connectez vos composants selon les assignations GPIO définies dans le code :
-* **HC-SR04 Entrée :** Trig `5` / Echo `18`
-* **HC-SR04 Sortie :** Trig `19` / Echo `23`
-* **Servomoteur (Barrière) :** PWM `13`
-* **Buzzer :** `12`
-* **LEDs :** Verte `2` / Rouge `4`
-
-
-4. Lancez la simulation. L'ESP32 se connectera au point d'accès virtuel `Wokwi-GUEST` puis au Broker HiveMQ.
-
-### 3. Configuration finale de la Supervision (Grafana)
-
-1. Accédez à `http://localhost:3000` (Identifiants par défaut : `admin` / `admin`).
-2. Ajoutez une nouvelle **Data Source** de type **Prometheus** avec l'URL suivante : `http://prometheus:9090`. Cliquez sur *Save & Test*.
-3. Créez un nouveau **Dashboard**, ajoutez un **Panel**, puis sélectionnez la métrique `parking_places_libres`.
-4. Optez pour la visualisation de type **Gauge**, réglez la valeur maximale à `10` et définissez vos seuils de couleur.
+| Service          | URL                           |
+| ---------------- | ----------------------------- |
+| Grafana          | http://localhost:3000         |
+| Prometheus       | http://localhost:9090         |
+| Metrics Endpoint | http://localhost:8000/metrics |
 
 ---
 
-## 🔍 Intérêt Réseau & Robustesse Architecture
+## 🔧 ESP32 Configuration
 
-Ce projet met en avant des concepts clés d'ingénierie des réseaux informatiques :
+### GPIO Mapping
 
-* **Légèreté applicative :** L'usage de MQTT permet de préserver la bande passante et les ressources CPU limitées de l'ESP32 par rapport à des requêtes HTTP/SQL classiques.
-* **Sécurité & Découplage :** L'intégration d'un Broker public tiers fait office de zone tampon (Proxy/Relais), évitant d'exposer l'adresse IP privée de l'infrastructure de stockage à l'appareil IoT de bordure (Edge).
-* **Conteneurisation & Portabilité :** L'intégralité du backend est isolée dans un réseau virtuel Docker interne, rendant la solution prête à être déployée à l'identique sur un serveur sur site ou sur un cloud privé (AWS, Azure, etc.).
+| Component             | GPIO |
+| --------------------- | ---- |
+| HC-SR04 Entry Trigger | 5    |
+| HC-SR04 Entry Echo    | 18   |
+| HC-SR04 Exit Trigger  | 19   |
+| HC-SR04 Exit Echo     | 23   |
+| Servo Motor           | 13   |
+| Buzzer                | 12   |
+| Green LED             | 2    |
+| Red LED               | 4    |
 
+### Required Library
+
+```text
+PubSubClient
 ```
+
+L'ESP32 se connecte automatiquement au réseau Wokwi puis au broker MQTT HiveMQ.
+
+---
+
+## 📊 Grafana Dashboard
+
+### Data Source
+
+Configurez Prometheus :
+
+```text
+http://prometheus:9090
 ```
+
+### Main Metric
+
+```promql
+parking_places_libres
+```
+
+### Recommended Visualization
+
+* Gauge Panel
+* Maximum : 10
+* Green : 7–10
+* Yellow : 3–6
+* Red : 0–2
+
+---
+
+## 🔍 Educational & Networking Concepts
+
+Ce projet illustre plusieurs concepts essentiels :
+
+### IoT Architecture
+
+* Communication machine-to-machine (M2M)
+* Edge Computing
+* IoT Telemetry
+
+### Network Engineering
+
+* MQTT Publish/Subscribe
+* Découplage des composants
+* Communication temps réel
+
+### Observability
+
+* Monitoring
+* Metrics Collection
+* Data Visualization
+* Time-Series Databases
+
+### DevOps
+
+* Docker
+* Docker Compose
+* Infrastructure as Code
+
+---
+
+## 🚀 Future Improvements
+
+* Authentification MQTT sécurisée (TLS).
+* Gestion multi-parkings.
+* Notifications Telegram ou WhatsApp.
+* Alertes Prometheus.
+* Application mobile.
+* Historisation des données dans InfluxDB.
+
+---
+
+## 📸 Screenshots
+
+Ajoutez ici :
+
+* Simulation Wokwi
+* Dashboard Grafana
+* Interface Prometheus
+* Architecture du projet
+
+---
+
+## 👨‍💻 Author
+
+**AGBENONZAN Kossivi Jacques Junior**
+**KONE Kpantieri**
+**HORO Désiré**
+
+Licence 3 Informatique
+UFR Mathématiques et Informatique
+Université Félix Houphouët-Boigny
+
+---
+
+## 📜 License
+
+Projet académique réalisé dans le cadre du module **Création de Services Réseaux et IoT**.
