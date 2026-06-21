@@ -1,63 +1,43 @@
 version: '3.8'
 
 services:
-  # 1. Le Broker MQTT (Mosquitto)
-  mosquitto:
-    image: eclipse-mosquitto:latest
-    container_name: mosquitto_broker
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb_storage
     ports:
-      - "1883:1883" # Port MQTT standard
-      - "9001:9001" # Port pour les WebSockets (optionnel)
+      - "8086:8086"
     volumes:
-      - mosquitto_data:/mosquitto/data
-      - mosquitto_log:/mosquitto/log
-    networks:
-      - parking_network
+      - influxdb_data:/var/lib/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=junior
+      - DOCKER_INFLUXDB_INIT_PASSWORD=MonMotDePasseSecurise123
+      - DOCKER_INFLUXDB_INIT_ORG=ufhb
+      - DOCKER_INFLUXDB_INIT_BUCKET=parking_metrics
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=MonSuperTokenSecretEtTresLongPourLAPI123456789
 
-  # 2. Le Script Python (Le Traducteur MQTT -> Prometheus)
   mqtt_exporter:
     build: ./mqtt_exporter
-    container_name: mqtt_to_prometheus
-    ports:
-      - "8000:8000" # Expose les métriques pour Prometheus
+    container_name: mqtt_to_influx
+    restart: always
     depends_on:
-      - mosquitto
-    networks:
-      - parking_network
+      - influxdb
+    environment:
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=MonSuperTokenSecretEtTresLongPourLAPI123456789
+      - INFLUXDB_ORG=ufhb
+      - INFLUXDB_BUCKET=parking_metrics
 
-  # 3. La Base de Données Temporelle (Prometheus)
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus_server
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-      - prometheus_data:/prometheus
-    depends_on:
-      - mqtt_exporter
-    networks:
-      - parking_network
-
-  # 4. Le Dashboard Visualisation (Grafana)
   grafana:
-    image: grafana/grafana:latest
-    container_name: grafana_dashboard
+    image: grafana/grafana-oss:latest
+    container_name: grafana_viz
     ports:
-      - "3000:3000" # Interface Web de Grafana
+      - "3000:3000"
     volumes:
       - grafana_data:/var/lib/grafana
     depends_on:
-      - prometheus
-    networks:
-      - parking_network
-
-networks:
-  parking_network:
-    driver: bridge
+      - influxdb
 
 volumes:
-  mosquitto_data:
-  mosquitto_log:
-  prometheus_data:
+  influxdb_data:
   grafana_data:
