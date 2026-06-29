@@ -2,6 +2,7 @@
 #include <LiquidCrystal_I2C.h>
 #include <ESP32Servo.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 #include <DHT.h>
@@ -28,21 +29,22 @@
 const char* ssid = "Wokwi-GUEST";
 const char* password = "";
 const char* mqtt_server = "broker.hivemq.com";
+const int mqtt_port = 8883;
 
-// ===== TOPICS MQTT (Convention SmartCampus CI) =====
-#define TOPIC_CAPTEURS "ufhb/grp_D/capteurs/parking"
-#define TOPIC_ALERTES  "ufhb/grp_D/alertes"
-#define TOPIC_STATUT   "ufhb/grp_D/statut"
+// Topics MQTT
+#define TOPIC_CAPTEURS   "ufhb/grp_D/capteurs/parking"
+#define TOPIC_ALERTES    "ufhb/grp_D/alertes"
+#define TOPIC_STATUT     "ufhb/grp_D/statut"
 #define TOPIC_EVENEMENTS "ufhb/grp_D/evenements"
-#define TOPIC_IDS      "ufhb/grp_D/ids/alertes" // 🛡️ Nouveau topic pour l'IDS physique
+#define TOPIC_IDS        "ufhb/grp_D/ids/alertes"
 
 // ============================================================
 // ===== CONSTANTES ===========================================
 // ============================================================
 const int PLACES_MAX = 10;
 const int DISTANCE_SEUIL = 150;
-const unsigned long INTERVALLE_ENVOI = 5000;  // 5 secondes
-const unsigned long TEMPS_OUVERTURE = 3000;    // 3 secondes
+const unsigned long INTERVALLE_ENVOI = 5000;
+const unsigned long TEMPS_OUVERTURE = 3000;
 
 // ============================================================
 // ===== OBJETS ===============================================
@@ -50,8 +52,8 @@ const unsigned long TEMPS_OUVERTURE = 3000;    // 3 secondes
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 Servo barriereEntree;
 Servo barriereSortie;
-WiFiClient espClient;
-PubSubClient client(espClient);
+WiFiClientSecure espClientSec;
+PubSubClient client(espClientSec);
 DHT dht(PIN_DHT, DHTTYPE);
 
 // ============================================================
@@ -70,7 +72,6 @@ unsigned long dernierAffichageLCD = 0;
 // ============================================================
 // ===== FONCTIONS ============================================
 // ============================================================
-
 float lireDistanceCM(int pinTrig, int pinEcho) {
   digitalWrite(pinTrig, LOW);
   delayMicroseconds(2);
@@ -111,7 +112,6 @@ void envoyerDonneesPeriodiques(float temp, float hum) {
 
   char buffer[256];
   serializeJson(doc, buffer);
-  
   Serial.print("📤 MQTT Periodique: ");
   Serial.println(buffer);
   client.publish(TOPIC_CAPTEURS, buffer, true);
@@ -123,16 +123,21 @@ void envoyerAlerteImmediate(const char* type, const char* message) {
   doc["message"] = message;
   doc["places_libres"] = placesLibres;
   doc["timestamp"] = millis();
+  
+  // Ajoute les valeurs actuelles
+  float temp = dht.readTemperature();
+  float hum = dht.readHumidity();
+  if (!isnan(temp)) doc["temperature"] = round(temp * 10) / 10.0;
+  if (!isnan(hum)) doc["humidite"] = round(hum * 10) / 10.0;
 
   char buffer[256];
   serializeJson(doc, buffer);
   
-  Serial.print("🚨 ALERTE SYSTEME: ");
+  Serial.print("🚨 ALERTE MÉTÉO: ");
   Serial.println(buffer);
   client.publish(TOPIC_ALERTES, buffer);
 }
 
-// 🛡️ FONCTION IDS : Alerte d'intrusion physique
 void envoyerAlerteIDS(const char* anomalie, float distanceInterception) {
   StaticJsonDocument<256> doc;
   doc["alerte"] = "INTRUSION_DETECTEE";
@@ -143,8 +148,7 @@ void envoyerAlerteIDS(const char* anomalie, float distanceInterception) {
 
   char buffer[256];
   serializeJson(doc, buffer);
-  
-  Serial.print("🛡️ [IDS ALERT]: ");
+  Serial.print("🛡️ IDS ALERT: ");
   Serial.println(buffer);
   client.publish(TOPIC_IDS, buffer);
 }
@@ -161,19 +165,21 @@ void envoyerEvenement(const char* evenement) {
 }
 
 void reconnecterMQTT() {
-  while (!client.connected()) {
-    Serial.print("🔄 MQTT...");
-    String clientId = "ESP32_SmartCampus_GrpD_" + String(random(0, 10000));
-    
-    if (client.connect(clientId.c_str(), TOPIC_STATUT, 1, true, "Hors-ligne")) {
-      Serial.println(" ✅ connecté !");
-      client.publish(TOPIC_STATUT, "En-ligne", true);
-    } else {
-      Serial.print(" ❌ échec, rc=");
-      Serial.print(client.state());
-      Serial.println(" - nouvelle tentative dans 5s");
-      delay(5000);
-    }
+  if (client.connected()) return;
+
+  static unsigned long dernierEssai = 0;
+  if (millis() - dernierEssai < 5000) return;
+  dernierEssai = millis();
+
+  Serial.print("🔄 Connexion MQTT...");
+  String clientId = "ESP32_SmartCampus_GrpD_" + String(random(0, 10000));
+  
+  if (client.connect(clientId.c_str(), TOPIC_STATUT, 1, true, "Hors-ligne")) {
+    Serial.println(" ✅ connecté !");
+    client.publish(TOPIC_STATUT, "En-ligne", true);
+  } else {
+    Serial.print(" ❌ rc=");
+    Serial.println(client.state());
   }
 }
 
@@ -182,13 +188,13 @@ void reconnecterMQTT() {
 // ============================================================
 void setup() {
   Serial.begin(115200);
-  delay(100);
-  
+  delay(2000);   // Important pour Wokwi
+
   Serial.println("\n========================================");
-  Serial.println("🚗 SMARTCAMPUS CI - PARKING (+ IDS PROTECTION)");
+  Serial.println("🚗 SMARTCAMPUS CI - PARKING");
   Serial.println("========================================");
-  
-  // Initialisation des broches
+
+  // Broches
   pinMode(PIN_TRIG_ENTREE, OUTPUT);
   pinMode(PIN_ECHO_ENTREE, INPUT);
   pinMode(PIN_TRIG_SORTIE, OUTPUT);
@@ -196,7 +202,7 @@ void setup() {
   pinMode(PIN_LED_VERTE, OUTPUT);
   pinMode(PIN_LED_ROUGE, OUTPUT);
   pinMode(PIN_BUZZER, OUTPUT);
-  
+
   digitalWrite(PIN_LED_VERTE, HIGH);
   digitalWrite(PIN_LED_ROUGE, LOW);
   digitalWrite(PIN_BUZZER, LOW);
@@ -206,10 +212,9 @@ void setup() {
   barriereEntree.write(0);
   barriereSortie.attach(PIN_SERVO_S);
   barriereSortie.write(0);
-  
-  // DHT22
+
   dht.begin();
-  
+
   // LCD
   lcd.init();
   lcd.backlight();
@@ -219,20 +224,18 @@ void setup() {
   lcd.setCursor(0, 1);
   lcd.print("  PARKING IOT   ");
 
-  // WiFi et MQTT
   setup_wifi();
-  client.setServer(mqtt_server, 1883);
+  espClientSec.setInsecure();
+  client.setServer(mqtt_server, mqtt_port);
   reconnecterMQTT();
-  
-  // Affichage final
+
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Places: 10");
   lcd.setCursor(0, 1);
   lcd.print("Disponible");
-  
-  Serial.println("✅ Système Edge prêt !");
-  Serial.println("========================================\n");
+
+  Serial.println("✅ Système prêt !");
 }
 
 // ============================================================
@@ -246,17 +249,15 @@ void loop() {
 
   unsigned long maintenant = millis();
   
-  // Lecture des distances aux barrières
   float distanceEntree = lireDistanceCM(PIN_TRIG_ENTREE, PIN_ECHO_ENTREE);
   float distanceSortie = lireDistanceCM(PIN_TRIG_SORTIE, PIN_ECHO_SORTIE);
 
-  // === GESTION DE LA BARRIÈRE D'ENTRÉE ===
+  // === GESTION ENTRÉE ===
   if (distanceEntree < DISTANCE_SEUIL && !voitureDevantEntree) {
     voitureDevantEntree = true;
     
     if (placesLibres > 0) {
       Serial.println("\n🚗 VOITURE À L'ENTRÉE !");
-      
       digitalWrite(PIN_BUZZER, HIGH);
       delay(150);
       digitalWrite(PIN_BUZZER, LOW);
@@ -275,47 +276,26 @@ void loop() {
       tempsFermetureEntree = maintenant + TEMPS_OUVERTURE;
       
       envoyerEvenement("entree_vehicule");
-      
-      Serial.print("✅ Places restantes: ");
-      Serial.println(placesLibres);
-      
     } else {
-      // 🛡️ CRITIQUE IDS : Tentative d'intrusion (Parking Plein + Forçage détecté au capteur)
-      Serial.println("\n⚠️ [IDS CRITIQUE] : Tentative de forçage du portail d'entrée !");
-      
+      Serial.println("\n⚠️ [IDS] Tentative d'intrusion !");
       lcd.clear();
       lcd.setCursor(0, 0);
       lcd.print("ACCES REFUSE !");
       lcd.setCursor(0, 1);
       lcd.print("INTRUSION PORTAIL");
       
-      // Envoi de l'alerte IDS structurée
-      envoyerAlerteIDS("Forcage de barriere d'entree (Parking Satire)", distanceEntree);
-      envoyerAlerteImmediate("FRAUDE_ENTREE", "Tentative d'entree sur parking plein");
-      
-      // Déclenchement de l'alarme matérielle locale
-      for(int i = 0; i < 4; i++) {
-        digitalWrite(PIN_BUZZER, HIGH);
-        digitalWrite(PIN_LED_ROUGE, HIGH);
-        delay(100);
-        digitalWrite(PIN_BUZZER, LOW);
-        digitalWrite(PIN_LED_ROUGE, LOW);
-        delay(100);
-      }
+      envoyerAlerteIDS("Forcage entree (Plein)", distanceEntree);
+      envoyerAlerteImmediate("FRAUDE_ENTREE", "Parking plein");
     }
   }
-  
-  if (distanceEntree >= DISTANCE_SEUIL) {
-    voitureDevantEntree = false;
-  }
+  if (distanceEntree >= DISTANCE_SEUIL) voitureDevantEntree = false;
 
-  // === GESTION DE LA BARRIÈRE DE SORTIE ===
+  // === GESTION SORTIE ===
   if (distanceSortie < DISTANCE_SEUIL && !voitureDevantSortie) {
     voitureDevantSortie = true;
     
     if (placesLibres < PLACES_MAX) {
       Serial.println("\n🚗 VOITURE À LA SORTIE !");
-      
       digitalWrite(PIN_BUZZER, HIGH);
       delay(150);
       digitalWrite(PIN_BUZZER, LOW);
@@ -334,71 +314,38 @@ void loop() {
       tempsFermetureSortie = maintenant + TEMPS_OUVERTURE;
       
       envoyerEvenement("sortie_vehicule");
-      
-      Serial.print("✅ Places restantes: ");
-      Serial.println(placesLibres);
     } else {
-      // 🛡️ SCÉNARIO IDS SUPPLÉMENTAIRE : Anomalie à la sortie (Une voiture passe alors que le parking est déjà vide)
-      envoyerAlerteIDS("Forcage de barriere de sortie / Detection suspecte", distanceSortie);
+      envoyerAlerteIDS("Anomalie sortie", distanceSortie);
     }
   }
-  
-  if (distanceSortie >= DISTANCE_SEUIL) {
-    voitureDevantSortie = false;
-  }
+  if (distanceSortie >= DISTANCE_SEUIL) voitureDevantSortie = false;
 
-  // === FERMETURE AUTOMATIQUE DES BARRIÈRES ===
+  // Fermeture barrières
   if (barriereEntreeOuverte && maintenant > tempsFermetureEntree) {
     barriereEntree.write(0);
     barriereEntreeOuverte = false;
     Serial.println("🔒 Barrière entrée fermée");
-    lcd.clear();
   }
-  
   if (barriereSortieOuverte && maintenant > tempsFermetureSortie) {
     barriereSortie.write(0);
     barriereSortieOuverte = false;
     Serial.println("🔒 Barrière sortie fermée");
-    lcd.clear();
   }
 
-  // === ENVOI PÉRIODIQUE ===
+  // === ENVOI PÉRIODIQUE & DETECTION SEUILS ENVIRONNEMENTAUX ===
   if (maintenant - dernierEnvoiPeriodique >= INTERVALLE_ENVOI) {
     dernierEnvoiPeriodique = maintenant;
+    float temp = dht.readTemperature();
+    float hum = dht.readHumidity();
     
-    float temperature = dht.readTemperature();
-    float humidite = dht.readHumidity();
-    
-    envoyerDonneesPeriodiques(temperature, humidite);
-    
-    if (!isnan(temperature) && temperature > 35.0) {
-      envoyerAlerteImmediate("TEMP_ELEVEE", "Temperature > 35°C");
-    }
-    if (!isnan(humidite) && humidite > 80.0) {
-      envoyerAlerteImmediate("HUMIDITE_ELEVEE", "Humidite > 80%");
-    }
-  }
+    envoyerDonneesPeriodiques(temp, hum);
 
-  // === AFFICHAGE LCD STANDARD ===
-  if (!barriereEntreeOuverte && !barriereSortieOuverte) {
-    if (maintenant - dernierAffichageLCD >= 500) {
-      dernierAffichageLCD = maintenant;
-      
-      lcd.setCursor(0, 0);
-      lcd.print("Places: ");
-      lcd.print(placesLibres);
-      lcd.print("  ");
-      
-      lcd.setCursor(0, 1);
-      if (placesLibres == 0) {
-        lcd.print("PARKING PLEIN");
-        digitalWrite(PIN_LED_ROUGE, HIGH);
-        digitalWrite(PIN_LED_VERTE, LOW);
-      } else {
-        lcd.print("Disponible    ");
-        digitalWrite(PIN_LED_VERTE, HIGH);
-        digitalWrite(PIN_LED_ROUGE, LOW);
-      }
+    // 💡 Déclenchement des alertes météo en cas de dépassement des seuils
+    if (!isnan(temp) && temp > 35.0) {
+      envoyerAlerteImmediate("TEMP_ELEVEE", "Temperature critique > 35C");
+    }
+    if (!isnan(hum) && hum > 80.0) {
+      envoyerAlerteImmediate("HUMIDITE_ELEVEE", "Humidite critique > 80%");
     }
   }
 

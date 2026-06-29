@@ -8,14 +8,50 @@
         "env": []
     },
     {
+        "id": "a92d185a2550c9be",
+        "type": "influxdb",
+        "hostname": "127.0.0.1",
+        "port": 8086,
+        "protocol": "http",
+        "database": "database",
+        "name": "ufhb",
+        "usetls": false,
+        "tls": "",
+        "influxdbVersion": "2.0",
+        "url": "http://influxdb:8086",
+        "timeout": 10,
+        "rejectUnauthorized": true
+    },
+    {
+        "id": "359d638241d809bf",
+        "type": "tls-config",
+        "name": "",
+        "certType": "files",
+        "cert": "",
+        "key": "",
+        "p12": "",
+        "p12name": "",
+        "ca": "",
+        "certname": "",
+        "keyname": "",
+        "caname": "",
+        "servername": "",
+        "verifyservercert": true,
+        "alpnprotocol": "",
+        "certEnv": "",
+        "keyEnv": "",
+        "caEnv": ""
+    },
+    {
         "id": "eb4561641fc3ad19",
         "type": "mqtt-broker",
         "name": "HiveMQ Public",
         "broker": "broker.hivemq.com",
-        "port": 1883,
+        "port": "8883",
+        "tls": "359d638241d809bf",
         "clientid": "",
         "autoConnect": true,
-        "usetls": false,
+        "usetls": true,
         "protocolVersion": 4,
         "keepalive": 60,
         "cleansession": true,
@@ -39,200 +75,186 @@
         "sessionExpiry": ""
     },
     {
-        "id": "a92d185a2550c9be",
-        "type": "influxdb",
-        "hostname": "127.0.0.1",
-        "port": 8086,
-        "protocol": "http",
-        "database": "database",
-        "name": "ufhb",
-        "usetls": false,
-        "tls": "",
-        "influxdbVersion": "2.0",
-        "url": "http://influxdb:8086",
-        "timeout": 10,
-        "rejectUnauthorized": true
-    },
-    {
-        "id": "ba23a93c246b9ebb",
+        "id": "main-mqtt",
         "type": "mqtt in",
         "z": "5cd1432007dc162c",
         "name": "Écoute HiveMQ - Groupe D",
         "topic": "ufhb/grp_D/#",
-        "qos": "2",
-        "datatype": "utf8",
+        "qos": "1",
+        "datatype": "auto-detect",
         "broker": "eb4561641fc3ad19",
         "nl": false,
-        "rap": true,
-        "rh": 0,
+        "rap": false,
         "inputs": 0,
-        "x": 180,
-        "y": 400,
+        "x": 160,
+        "y": 120,
         "wires": [
             [
-                "0831eb6bda2483bb"
+                "topic-switch"
             ]
         ]
     },
     {
-        "id": "d363397365a37007",
-        "type": "json",
-        "z": "5cd1432007dc162c",
-        "name": "Analyse JSON",
-        "property": "payload",
-        "action": "",
-        "pretty": false,
-        "x": 400,
-        "y": 320,
-        "wires": [
-            [
-                "249fd43aa4641ee0"
-            ]
-        ]
-    },
-    {
-        "id": "249fd43aa4641ee0",
+        "id": "topic-switch",
         "type": "switch",
         "z": "5cd1432007dc162c",
-        "name": "Filtrage ETL (switch)",
-        "property": "payload.temperature",
-        "propertyType": "msg",
-        "rules": [
-            {
-                "t": "empty"
-            },
-            {
-                "t": "else"
-            }
-        ],
-        "checkall": "true",
-        "repair": false,
-        "outputs": 2,
-        "x": 520,
-        "y": 240,
-        "wires": [
-            [
-                "a95c484027a38b62"
-            ],
-            [
-                "f410ba3fecebcec1"
-            ]
-        ]
-    },
-    {
-        "id": "f410ba3fecebcec1",
-        "type": "influxdb out",
-        "z": "5cd1432007dc162c",
-        "influxdb": "a92d185a2550c9be",
-        "name": "Base de données",
-        "measurement": "parking_data",
-        "precision": "",
-        "retentionPolicy": "",
-        "database": "database",
-        "precisionV18FluxV20": "ms",
-        "retentionPolicyV18Flux": "",
-        "org": "ufhb",
-        "bucket": "smartcampus",
-        "x": 730,
-        "y": 360,
-        "wires": []
-    },
-    {
-        "id": "a95c484027a38b62",
-        "type": "mqtt out",
-        "z": "5cd1432007dc162c",
-        "name": "Alerte Panne",
-        "topic": "ufhb/grp_D/erreurs",
-        "qos": "",
-        "retain": "",
-        "respTopic": "",
-        "contentType": "",
-        "userProps": "",
-        "correl": "",
-        "expiry": "",
-        "broker": "eb4561641fc3ad19",
-        "x": 730,
-        "y": 140,
-        "wires": []
-    },
-    {
-        "id": "0831eb6bda2483bb",
-        "type": "switch",
-        "z": "5cd1432007dc162c",
-        "name": "Filtrer Topic",
+        "name": "Filtre des Topics",
         "property": "topic",
         "propertyType": "msg",
         "rules": [
             {
-                "t": "eq",
+                "t": "cont",
                 "v": "ufhb/grp_D/capteurs/parking",
+                "vt": "str"
+            },
+            {
+                "t": "cont",
+                "v": "ufhb/grp_D/alertes",
+                "vt": "str"
+            },
+            {
+                "t": "cont",
+                "v": "ufhb/grp_D/ids/alertes",
                 "vt": "str"
             }
         ],
         "checkall": "true",
         "repair": false,
-        "outputs": 1,
-        "x": 210,
-        "y": 320,
+        "outputs": 3,
+        "x": 260,
+        "y": 200,
         "wires": [
             [
-                "d363397365a37007"
+                "parse-capteurs"
+            ],
+            [
+                "parse-alertes"
+            ],
+            [
+                "parse-ids"
             ]
         ]
     },
     {
-        "id": "65147b276455733a",
-        "type": "mqtt in",
+        "id": "parse-capteurs",
+        "type": "json",
         "z": "5cd1432007dc162c",
-        "name": "Ecoute HiveMQ Alerte",
-        "topic": "ufhb/grp_D/ids/alertes",
-        "qos": "2",
-        "datatype": "utf8",
-        "broker": "eb4561641fc3ad19",
-        "nl": false,
-        "rap": true,
-        "rh": 0,
-        "inputs": 0,
-        "x": 140,
-        "y": 100,
+        "name": "Analyse JSON Capteurs",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 540,
+        "y": 140,
         "wires": [
             [
-                "440f3386f9e947a0"
+                "influx-capteurs"
             ]
         ]
     },
     {
-        "id": "440f3386f9e947a0",
+        "id": "parse-alertes",
+        "type": "json",
+        "z": "5cd1432007dc162c",
+        "name": "Analyse JSON Alertes",
+        "property": "payload",
+        "action": "obj",
+        "pretty": false,
+        "x": 540,
+        "y": 220,
+        "wires": [
+            [
+                "format-alertes"
+            ]
+        ]
+    },
+    {
+        "id": "parse-ids",
         "type": "json",
         "z": "5cd1432007dc162c",
         "name": "Analyse JSON IDS",
         "property": "payload",
-        "action": "",
+        "action": "obj",
         "pretty": false,
-        "x": 370,
-        "y": 180,
+        "x": 430,
+        "y": 300,
         "wires": [
             [
-                "c32f4315a087ad48"
+                "influx-ids"
             ]
         ]
     },
     {
-        "id": "c32f4315a087ad48",
+        "id": "format-alertes",
+        "type": "function",
+        "z": "5cd1432007dc162c",
+        "name": "Formatage Alertes Météo",
+        "func": "// Formatage des données parking + météo\nlet p = msg.payload;\n\nmsg.payload = {\n    places_libres: Number(p.places_libres) || 0,\n    temperature: p.temperature !== undefined ? Number(p.temperature) : null,\n    humidite: p.humidite !== undefined ? Number(p.humidite) : null,\n    statut_parking: p.statut_parking || \"DISPONIBLE\"\n};\n\nmsg.topic = \"parking_data\";   // Nom de la measurement dans InfluxDB\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 910,
+        "y": 260,
+        "wires": [
+            [
+                "influx-alertes"
+            ]
+        ]
+    },
+    {
+        "id": "influx-capteurs",
         "type": "influxdb out",
         "z": "5cd1432007dc162c",
         "influxdb": "a92d185a2550c9be",
-        "name": "Base Alertes IDS",
-        "measurement": "alertes_ids",
-        "precision": "",
+        "name": "InfluxDB - Parking",
+        "measurement": "parking",
+        "precision": "ms",
         "retentionPolicy": "",
-        "database": "database",
+        "database": "",
         "precisionV18FluxV20": "ms",
         "retentionPolicyV18Flux": "",
         "org": "ufhb",
         "bucket": "smartcampus",
-        "x": 550,
-        "y": 40,
+        "x": 780,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "influx-alertes",
+        "type": "influxdb out",
+        "z": "5cd1432007dc162c",
+        "influxdb": "a92d185a2550c9be",
+        "name": "InfluxDB - Alertes",
+        "measurement": "alertes",
+        "precision": "ms",
+        "retentionPolicy": "",
+        "database": "",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "ufhb",
+        "bucket": "smartcampus",
+        "x": 830,
+        "y": 420,
+        "wires": []
+    },
+    {
+        "id": "influx-ids",
+        "type": "influxdb out",
+        "z": "5cd1432007dc162c",
+        "influxdb": "a92d185a2550c9be",
+        "name": "InfluxDB - IDS",
+        "measurement": "alertes_ids",
+        "precision": "ms",
+        "retentionPolicy": "",
+        "database": "",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "ufhb",
+        "bucket": "smartcampus",
+        "x": 660,
+        "y": 300,
         "wires": []
     }
 ]
